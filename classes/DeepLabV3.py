@@ -13,11 +13,12 @@ from tensorflow.python.keras.layers import Lambda, Dropout
 
 from tensorflow.python.keras import backend as K
 from tensorflow.python.keras.utils.layer_utils import get_source_inputs
+from tensorflow.keras.optimizers import SGD
 # from tensorflow.python.keras.utils.data_utils import get_file
-
+import os
 
 class DeepLabV3:
-    def __init__(self, k_data, k_data_labels=None, input_tensor=None, os=16, input_shape=(256, 256, 1), classes=4, alpha=1., activation=None,
+    def __init__(self, k_data, k_data_labels=None, k_data_test=None, k_data_labels_test=None, input_tensor=None, os=16, input_shape=(256, 256, 1), classes=20, alpha=1., activation=None,
                  weights_path=None):
         """ Instantiates the Deeplabv3+ architecture
         # Arguments
@@ -89,17 +90,29 @@ class DeepLabV3:
 
         if self.weights == 'given':
             self.model.load_weights(self.weights_path, by_name=True)
-
-
-        # what parameters did they use?
-        self.model.compile(optimizer='adam', loss='binary_crossentropy')
-        # fit model with data, what batch size, and what number of epochs did they use?
-        if k_data_labels is not None:
-            self.model.fit([k_data], [k_data_labels])
-            self.model.save('unwrapping_phase_model.h5')  # creates a HDF5 file 'my_model.h5'
         else:
-            # download weights!
-            self.model.load_model('unwrapping_phase_model.h5')
+
+            # what parameters did they use?
+            # Furthermore, during training, we used the stochastic gradient descent (SGD) with momentum
+            # 0.9 for 200000 iterations, base learning rate 0.005, mini-batch size 8 and learning power 0.9.
+            # epochs=2e5
+            epochs=3000
+            sgd = SGD(learning_rate=0.005, nesterov=True, momentum=0.9, decay=0.9/epochs)
+            self.model.compile(loss='mean_squared_error', optimizer=sgd, metrics=['accuracy'])
+            self.model.fit([k_data], [k_data_labels], batch_size=8,epochs=epochs)
+            # self.model.save('unwrapping_phase_model.h5')  # creates a HDF5 file 'my_model.h5'
+            # Save the weights
+            self.model.save_weights('/home/jan/Desktop/UnwrappingPhase/Training/add_noise_2/my_checkpoint')
+
+            # Evaluate the model
+            print(self.model.metrics_names)
+            loss, acc = self.model.evaluate(k_data_test, k_data_labels_test, verbose=2)
+            print("Untrained model, accuracy: {:5.2f}%".format(100 * acc))
+
+
+        # Display the model's architecture
+        self.model.summary()
+
 
         # self.parallel_model = multi_gpu_model(self.model, gpus=8)
         # # what parameters did they use?
