@@ -14,12 +14,12 @@ from tensorflow.python.keras.layers import Lambda, Dropout
 from tensorflow.python.keras import backend as K
 from tensorflow.python.keras.utils.layer_utils import get_source_inputs
 from tensorflow.keras.optimizers import SGD
-# from tensorflow.python.keras.utils.data_utils import get_file
+from tensorflow.python.keras.utils.data_utils import get_file
 import os
 
 class DeepLabV3:
-    def __init__(self, k_data, k_data_labels=None, k_data_test=None, k_data_labels_test=None, input_tensor=None, os=16, input_shape=(256, 256, 1), classes=20, alpha=1., activation=None,
-                 weights_path=None):
+    def __init__(self, k_data=None, k_data_labels=None, k_data_test=None, k_data_labels_test=None, input_tensor=None, os=16, input_shape=(256, 256, 1), classes=20, alpha=1., activation=None,
+                 weights_path=None, weightname=None, weights=None):
         """ Instantiates the Deeplabv3+ architecture
         # Arguments
             weights: one of 'pascal_voc' (pre-trained on pascal voc),
@@ -75,21 +75,26 @@ class DeepLabV3:
         self.size_before3 = None
         self.skip1 = None
         self.weights_path = weights_path
-        self.weights = None
+        self.weights = weights
+        self.weightname = weightname
         self.x = None
 
         # initialize deeplab3v+ NN - architecture
-
-        k_shape = k_data.shape[1:]
+        if k_data is not None:
+            k_shape = k_data.shape[1:]
 
         # create keras - model
         self.model_architecture()
         self.model = Model(self.inputs, self.x, name='deeplabv3plus')
 
-        # load weights
 
+        # load weights
         if self.weights == 'given':
-            self.model.load_weights(self.weights_path, by_name=True)
+            self.weights_model = get_file(self.weightname,
+                                    self.weights_path+self.weightname,
+                                    cache_subdir='models')
+
+            self.model.load_weights(self.weights_model, by_name=True)
         else:
 
             # what parameters did they use?
@@ -189,11 +194,6 @@ class DeepLabV3:
         self.b4 = Lambda(lambda x: tf.compat.v1.image.resize(x, self.size_before[1:3],method='bilinear',
                                                              align_corners=True))(self.b4)
 
-
-        # upsample. have to use compat because of the option align_corners
-        self.size_before = tf.keras.backend.int_shape(self.x)
-        self.b4 = Lambda(lambda x: tf.compat.v1.image.resize(x, self.size_before[1:3], method='bilinear',
-                                                             align_corners=True))(self.b4)
         # simple 1x1
         self.b0 = Conv2D(256, (1, 1), padding='same', use_bias=False, name='aspp0')(self.x)
         self.b0 = BatchNormalization(name='aspp0_BN', epsilon=1e-5)(self.b0)
@@ -229,6 +229,12 @@ class DeepLabV3:
         self.x = Concatenate()([self.x, self.dec_skip1])
         self.x = self.sep_conv_bn(self.x, 256, 'decoder_conv0', depth_activation=True, epsilon=1e-5)
         self.x = self.sep_conv_bn(self.x, 256, 'decoder_conv1', depth_activation=True, epsilon=1e-5)
+
+        # you can use it with arbitary number of classes
+        if (self.weights == 'given' and self.classes == 21) or (self.weights == 'given'  and self.classes == 19):
+            self.last_layer_name = 'logits_semantic'
+        else:
+            self.last_layer_name = 'custom_logits_semantic'
 
         # you can use it with arbitary number of classes
         self.x = Conv2D(self.classes, (1, 1), padding='same', name=self.last_layer_name)(self.x)

@@ -1,52 +1,35 @@
 import numpy as np
-
-from kerasdeeplabv3plus.model import Deeplabv3
+import cv2  # used for resize
+from matplotlib import pyplot as pylab
 from classes.ClusteringParser import ClusteringParser
 from classes.Config import Config
-import os
-from sklearn.model_selection import train_test_split
+from classes.DeepLabV3 import DeepLabV3
+
 
 def main(cl_parser: Config, cl_config: dict):
-    """
-    * check whether  model should be trained or not
-    * check whether train data path is given
-    * call train class/method
-        . call encoder
-        . decoder
-    * fit data
-    * save network weights
+    # os.chdir('keras-deeplab-v3-plus-master') # go to keras-deeplab-v3-plusmaster
 
-    * read network weights
-    * read input image
-    * output
-    """
-    # load data
-    # function to separate data into test and train data (0.66, 0.33)
-    # train (0.9 train, 0.1 validation data)
-    filepath_wrap = "/media/sonja/Elements/Projects/Unwrapping_phase/Training/add_noise_2/wrap/"
-    filepath_true = "/media/sonja/Elements/Projects/Unwrapping_phase/Training/add_noise_2/k/"
-    list_of_files_wrap = sorted([os.path.join(filepath_wrap, item) for item in os.listdir(filepath_wrap)
-                          if os.path.isfile(os.path.join(filepath_wrap, item))])
-    list_of_files_true = sorted([os.path.join(filepath_true, item) for item in os.listdir(filepath_true)
-                          if os.path.isfile(os.path.join(filepath_true, item))])
-    length_files = 10 #  len(list_of_files_true)
-    dim_ = 256
-    images_wrap = np.zeros((length_files, dim_, dim_))
-    images_true = np.zeros((length_files, dim_, dim_))
+    deeplab_model = DeepLabV3(input_tensor=None, os=16, input_shape=(512, 512, 3), classes=21, alpha=1.,
+                              activation=None, weights_path="https://github.com/bonlime/keras-deeplab-v3-plus/releases/download/1.1/",
+                              weightname="deeplabv3_xception_tf_dim_ordering_tf_kernels.h5", weights="given")
 
-
-    for i in range(length_files):  #length_files
-        images_wrap[i] = np.loadtxt(list_of_files_wrap[i])
-        images_true[i] = np.loadtxt(list_of_files_true[i])
-    images_wrap = np.expand_dims(images_wrap, axis=3)
-    images_true = np.expand_dims(images_true, axis=3)
-    #
-    X_train, X_test, y_train, y_test = train_test_split(images_wrap, images_true, test_size=0.33, random_state=0)
-    logger.info("Initialize model...")
-    # unwrapping_model = UnwrappingModel(X_train,y_train)
-    deeplab_model = Deeplabv3(weights='pascal_voc', input_tensor=None, input_shape=(256, 256, 1), classes=21, backbone='xception',
-              OS=16, alpha=1., activation=None)
-    #unwrapping_model = DeepLabV3(X_train,y_train)
+    pathIn = 'input'  # path for the input image
+    pathOut = 'output'  # output path for the segmented image
+    img = pylab.imread(pathIn + "/image1.jpg")
+    w, h, _ = img.shape
+    ratio = 512. / np.max([w, h])
+    resized = cv2.resize(img, (int(ratio * h), int(ratio * w)))
+    resized = resized / 127.5 - 1.
+    pad_x = int(512 - resized.shape[0])
+    resized2 = np.pad(resized, ((0, pad_x), (0, 0), (0, 0)), mode='constant')
+    res = deeplab_model.model.predict(np.expand_dims(resized2, 0))
+    labels = np.argmax(res.squeeze(), -1)
+    pylab.figure(figsize=(20, 20))
+    pylab.imshow(labels[:-pad_x], cmap='inferno'), pylab.axis('off'), pylab.colorbar()
+    # pylab.show()
+    pylab.savefig(pathOut + "/segmented.png", bbox_inches='tight', pad_inches=0)
+    pylab.close()
+    # os.chdir('..')
 
 if __name__ == '__main__':
     import logging.config
