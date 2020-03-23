@@ -3,3 +3,4 @@ Training
 .idea
 logfile.log
 literature
+__pycache__
